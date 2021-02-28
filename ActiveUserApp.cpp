@@ -4,13 +4,15 @@
 #include<thread>
 using namespace std;
 
-const int MEASURE_CYCLES = 10000;
-const int LOOPS = 1000;
-long long USER_APP_CYCLES = 0;
-long long TOTAL_SUM = 0;
+const unsigned MEASURE_CYCLES = 10000;
+const unsigned INNER_LOOPS = 10;
+unsigned long long USER_APP_CYCLES = 0;
+unsigned long long TOTAL_SUM = 0;
+unsigned long long MEASURE_SUM = 0;
+const unsigned VARIABLES = 10;
 const uint32_t MAX_VALUE = numeric_limits<uint32_t>::max();
-vector<uint32_t>measured(10, 0);
-vector<uint32_t>distab(10, 0);
+vector<uint32_t>measured(VARIABLES, 0);
+vector<uint32_t>distab(VARIABLES, 0);
 volatile bool runActivity = true;
 
 uint32_t getFib(uint32_t x)
@@ -45,7 +47,7 @@ void loopSimulator()
 	uint32_t x4 = 0;
 	distab[4] = x4;
 
-	for (int i = 0; i < LOOPS; i++)
+	for (unsigned i = 0; i < INNER_LOOPS; i++)
 	{
 		x0++;
 		distab[0] = x0;
@@ -70,7 +72,7 @@ void loopSimulator()
 
 void checkValues()
 {
-	uint32_t start = 10;
+	uint32_t start = 20;
 	{
 		uint32_t x5 = getFib(start);
 		distab[5] = x5;
@@ -122,17 +124,24 @@ void Measure()
 {
 	const std::chrono::duration<double, std::ratio<1, 1000000>> span = std::chrono::milliseconds(1);
 	std::chrono::high_resolution_clock::time_point lastSample = std::chrono::high_resolution_clock::now();
-	int loopCount = 0;
+	unsigned loopCount = 0;
 	while (loopCount < MEASURE_CYCLES)
 	{
 		std::chrono::high_resolution_clock::time_point nextSample = std::chrono::high_resolution_clock::now();
 		if (nextSample - lastSample > span)
 		{
-			std::copy(distab.begin(), distab.end(), measured.begin());
+			for (unsigned i = 0; i < VARIABLES; i++)
+			{
+				if (distab[i] != MAX_VALUE)
+				{
+					measured[i] = distab[i];
+					MEASURE_SUM += measured[i];
+				}
+			}
 			lastSample = nextSample;
 			loopCount++;
 			if (loopCount % 1000 == 0)
-				cout << loopCount << " ...\n";
+				cout << loopCount << " measurements\n";
 		}
 	}
 	runActivity = false;
@@ -147,9 +156,11 @@ int main()
 	MeasureThread.join();
 	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
 	auto time_duration = std::chrono::duration_cast<chrono::milliseconds>(t2 - t1).count();
-	cout << "Active User App " << MEASURE_CYCLES << " measure cycles in " << time_duration << " milliseconds" << endl;
-	cout << "Active User App " << USER_APP_CYCLES / 1000 << " thousands run cycles" << endl;
-	cout << TOTAL_SUM << endl;
+	cout << "Active User App: " << endl;
+	cout << MEASURE_CYCLES << " measurements in " << time_duration << " milliseconds" << endl;
+	cout << "UserApp run " << USER_APP_CYCLES / 1000000 << " million cycles" << endl;
+	cout << "TOTAL_SUM: " << TOTAL_SUM <<  endl;
+	cout << "MEASURE_SUM: " << MEASURE_SUM << endl;
 
 	__debugbreak();
 }

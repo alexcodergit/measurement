@@ -5,13 +5,15 @@
 #include <mutex>
 using namespace std;
 
-const int MEASURE_CYCLES = 10000;
-const int LOOPS = 1000;
-long long USER_APP_CYCLES = 0;
-long long TOTAL_SUM = 0;
-vector<uint32_t>measured(10, 0);
-vector<uint32_t*> addresses(10, nullptr);
-vector<std::mutex> mutexes(10);
+const unsigned MEASURE_CYCLES = 10000;
+const unsigned INNER_LOOPS = 10;
+unsigned long long USER_APP_CYCLES = 0;
+unsigned long long TOTAL_SUM = 0;
+unsigned long long MEASURE_SUM = 0;
+const unsigned VARIABLES = 10;
+vector<uint32_t>measured(VARIABLES, 0);
+vector<uint32_t*> addresses(VARIABLES, nullptr);
+vector<std::mutex> mutexes(VARIABLES);
 volatile bool runActivity = true;
 
 uint32_t getFib(uint32_t x)
@@ -60,7 +62,7 @@ void loopSimulator()
 	addresses[4] = &x4;
 	mutexes[4].unlock();
 
-	for (int i = 0; i < LOOPS; i++)
+	for (unsigned i = 0; i < INNER_LOOPS; i++)
 	{
 		x0++;
 		x1 = x1 + x0;
@@ -94,7 +96,7 @@ void loopSimulator()
 
 void checkValues()
 {
-	uint32_t start = 10;
+	uint32_t start = 20;
 	{
 		uint32_t x5 = getFib(start);
 
@@ -177,19 +179,20 @@ void Measure()
 {
 	const std::chrono::duration<double, std::ratio<1, 1000000>> span = std::chrono::milliseconds(1);
 	std::chrono::high_resolution_clock::time_point lastSample = std::chrono::high_resolution_clock::now();
-	int loopCount = 0;
+	unsigned loopCount = 0;
 	while (loopCount < MEASURE_CYCLES)
 	{
 		std::chrono::high_resolution_clock::time_point nextSample = std::chrono::high_resolution_clock::now();
 		if (nextSample - lastSample > span)
 		{
-			for (unsigned i = 0; i < 10; i++)
+			for (unsigned i = 0; i < VARIABLES; i++)
 			{
 				if (mutexes[i].try_lock())
 				{
 					if (addresses[i] != nullptr)
 					{
 						measured[i] = *(addresses[i]);
+						MEASURE_SUM += (measured[i]);
 					}
 					mutexes[i].unlock();
 				}
@@ -198,7 +201,7 @@ void Measure()
 			lastSample = nextSample;
 			loopCount++;
 			if (loopCount % 1000 == 0)
-				cout << loopCount << " ...\n";
+				cout << loopCount << " measurements\n";
 		}
 	}
 	runActivity = false;
@@ -214,8 +217,11 @@ int main()
 	MeasureThread.join();
 	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
 	auto time_duration = std::chrono::duration_cast<chrono::milliseconds>(t2 - t1).count();
-	cout << "Passive User App with try lock " << MEASURE_CYCLES << " measure cycles in " << time_duration << " milliseconds" << endl;
-	cout << "Passive User App with trylock cycles " << USER_APP_CYCLES / 1000 << " thousands"  << endl;
-	cout << TOTAL_SUM << endl;
+	cout << "Passive User App With Trylocks:" << endl;
+	cout << MEASURE_CYCLES << " measurements in " << time_duration << " milliseconds" << endl;
+	cout << "UserApp run " << USER_APP_CYCLES / 1000000 << " million cycles" << endl;
+	cout << "TOTAL_SUM: " << TOTAL_SUM << endl;
+	cout << "MEASURE_SUM: " << MEASURE_SUM << endl;
+
 	__debugbreak();
 }
